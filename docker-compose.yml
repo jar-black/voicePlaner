@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+  orchestrator:
+    build: ./orchestrator
+    ports:
+      - "${ORCHESTRATOR_PORT:-8000}:8000"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - GITHUB_MCP_URL=${GITHUB_MCP_URL}
+      - PLANNING_MCP_URL=${PLANNING_MCP_URL}
+      - CLAUDE_CODE_MCP_URL=${CLAUDE_CODE_MCP_URL}
+    depends_on:
+      db:
+        condition: service_healthy
+      github-mcp:
+        condition: service_started
+      planning-mcp:
+        condition: service_started
+      claude-code-mcp:
+        condition: service_started
+    volumes:
+      - ./orchestrator:/app
+      - project-data:/data
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  github-mcp:
+    build: ./mcp-servers/github-mcp
+    ports:
+      - "8001:8001"
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITHUB_ORG=${GITHUB_ORG}
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  planning-mcp:
+    build: ./mcp-servers/project-planning-mcp
+    ports:
+      - "8002:8002"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app-network
+    volumes:
+      - planning-data:/data
+    restart: unless-stopped
+
+  claude-code-mcp:
+    build: ./mcp-servers/claude-code-mcp
+    ports:
+      - "8003:8003"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    volumes:
+      - claude-code-workspace:/workspace
+      - ~/.claude:/root/.claude:ro
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  project-data:
+  planning-data:
+  claude-code-workspace:
+
+networks:
+  app-network:
+    driver: bridge
