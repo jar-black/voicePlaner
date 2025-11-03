@@ -86,6 +86,27 @@ services:
       retries: 5
     restart: unless-stopped
 
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "443:443"
+      - "8443:8443"
+      - "8444:8444"
+      - "8445:8445"
+      - "8446:8446"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl/mcp.crt:/etc/ssl/certs/mcp.crt:ro
+      - ./ssl/mcp.key:/etc/ssl/private/mcp.key:ro
+    depends_on:
+      - orchestrator
+      - github-mcp
+      - planning-mcp
+      - claude-code-mcp
+    networks:
+      - app-network
+    restart: unless-stopped
+
 volumes:
   postgres-data:
   project-data:
